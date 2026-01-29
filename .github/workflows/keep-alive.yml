@@ -1,0 +1,44 @@
+name: Keep HuggingFace Space Alive
+
+on:
+  schedule:
+    # Run every 10 minutes to prevent sleep (HF free tier sleeps after ~15min inactivity)
+    - cron: '*/14 * * * *'
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping HuggingFace Space
+        run: |
+          echo "🚀 Pinging HuggingFace Space at $(date)"
+          
+          # Ping the main endpoint
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 60 \
+            https://gaurav00107-ai-voice-detection.hf.space/)
+          
+          echo "Response code: $response"
+          
+          if [ "$response" = "200" ]; then
+            echo "✅ Space is alive and responding!"
+          elif [ "$response" = "000" ]; then
+            echo "⏳ Space might be cold-starting, waiting 30s and retrying..."
+            sleep 30
+            response2=$(curl -s -o /dev/null -w "%{http_code}" \
+              --max-time 120 \
+              https://gaurav00107-ai-voice-detection.hf.space/)
+            echo "Retry response: $response2"
+          else
+            echo "⚠️ Space returned $response - checking health..."
+          fi
+          
+          # Optional: Also hit a POST endpoint to warm up the ML models
+          echo "🔥 Warming up models with test request..."
+          curl -s -X POST https://gaurav00107-ai-voice-detection.hf.space/ \
+            -H "Content-Type: application/json" \
+            -d '{"audioBase64":"UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=","language":"english","audioFormat":"wav"}' \
+            --max-time 120 || echo "Model warmup request sent"
+          
+          echo "✅ Keep-alive complete!"
